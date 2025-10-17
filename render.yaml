@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: gps-fastapi
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: API_KEY
+        sync: false         # set in dashboard
+      - key: DATABASE_URL
+        sync: false         # e.g. from Render Postgres add-on
