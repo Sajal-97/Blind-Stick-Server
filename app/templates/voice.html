@@ -1,0 +1,127 @@
+<!doctype html>
+<html>
+<head>
+        <meta charset="utf-8"/>
+        <title>Live Voice Translate</title>
+        <meta name="viewport" content="width=device-width,initial-scale=1"/>
+        <style>
+            body { font-family: Arial, sans-serif; padding: 16px }
+            label { display:block; margin-top:8px }
+            button { margin-top:8px }
+            #status { margin-left:8px; color: green }
+        </style>
+</head>
+<body>
+        <h3>Live Voice Translate</h3>
+        <div>
+                <label>API Key (X-API-Key): <input id="api_key" value="change-me" size="24"/></label>
+                <label>Device ID (optional): <input id="device_id" value="esp32-1" size="24"/></label>
+                <label>Target language (ISO code): <input id="lang_tgt" value="en" size="6"/></label>
+                <div>
+                    <button id="start">Start Recording</button>
+                    <button id="stop" disabled>Stop</button>
+                    <span id="status">idle</span>
+                </div>
+                <div style="margin-top:8px">
+                    <audio id="player" controls style="display:none"></audio>
+                </div>
+        </div>
+
+        <h4>Result</h4>
+        <div id="result">No recording yet</div>
+
+        <h4>Recent messages</h4>
+        <div id="list">(loading...)</div>
+
+        <script>
+        let mediaRecorder = null;
+        let recordedChunks = [];
+
+        async function reloadList(){
+                try{
+                    const res = await fetch('/voice_messages');
+                    const data = await res.json();
+                    const el = document.getElementById('list');
+                    if(!data.length){ el.innerText = '(no messages)'; return }
+                      el.innerHTML = data.map(d=>`<div style="padding:8px;border-bottom:1px solid #eee"><b>#${d.id}</b> [${d.device_id||'-'}] <br/><i>src:</i> ${d.lang_src||'-'} &nbsp; <i>tgt:</i> ${d.lang_tgt||'-'}<br/><b>Transcript:</b> ${d.transcript||''}<br/><b>Translation:</b> ${d.translation||''}${d.audio_path?`<br/><audio controls src="/${d.audio_path}"></audio>`:''}</div>`).join('');
+                }catch(e){ console.error(e); }
+        }
+
+        document.getElementById('start').addEventListener('click', async ()=>{
+            const status = document.getElementById('status');
+            if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+                alert('Your browser does not support microphone capture');
+                return;
+            }
+            try{
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                recordedChunks = [];
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = (e) => { if(e.data && e.data.size) recordedChunks.push(e.data); };
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const player = document.getElementById('player');
+                    player.src = url; player.style.display = 'block';
+
+                    // send to server
+                    const fd = new FormData();
+                    fd.append('file', blob, 'recording.webm');
+                    fd.append('device_id', document.getElementById('device_id').value);
+                    fd.append('lang_tgt', document.getElementById('lang_tgt').value || 'en');
+                    const apiKey = document.getElementById('api_key').value;
+                    const res = await fetch('/upload_voice', { method: 'POST', body: fd, headers: { 'X-API-Key': apiKey } });
+                    const json = await res.json();
+                    const out = document.getElementById('result');
+                    if(!json.ok){ out.innerText = 'Upload failed'; return }
+                    out.innerHTML = `<b>Saved</b> id=${json.id}<br/><b>Transcript:</b> ${json.transcript||'(none)'}<br/><b>Translation:</b> ${json.translation||'(none)'}<br/><b>Detected source:</b> ${json.lang_src||'(unknown)'} `;
+                    reloadList();
+                };
+                mediaRecorder.start();
+                status.innerText = 'recording';
+                document.getElementById('start').disabled = true;
+                document.getElementById('stop').disabled = false;
+            }catch(err){
+                alert('Could not start microphone: ' + err.message);
+            }
+        });
+
+        document.getElementById('stop').addEventListener('click', ()=>{
+            if(mediaRecorder && mediaRecorder.state === 'recording'){
+                mediaRecorder.stop();
+                document.getElementById('status').innerText = 'stopped';
+                document.getElementById('start').disabled = false;
+                document.getElementById('stop').disabled = true;
+            }
+        });
+
+        // upload fallback for choosing files
+        // keep old file upload UI functionality for users without mic
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file'; fileInput.accept = 'audio/*';
+        const uploadBtn = document.createElement('button');
+        uploadBtn.innerText = 'Upload File';
+        uploadBtn.addEventListener('click', async ()=>{
+            fileInput.click();
+            fileInput.onchange = async ()=>{
+                if(!fileInput.files.length) return;
+                const fd = new FormData();
+                fd.append('file', fileInput.files[0]);
+                fd.append('device_id', document.getElementById('device_id').value);
+                fd.append('lang_tgt', document.getElementById('lang_tgt').value || 'en');
+                const apiKey = document.getElementById('api_key').value;
+                const res = await fetch('/upload_voice', { method: 'POST', body: fd, headers: { 'X-API-Key': apiKey } });
+                const json = await res.json();
+                const out = document.getElementById('result');
+                if(!json.ok){ out.innerText = 'Upload failed'; return }
+                out.innerHTML = `<b>Saved</b> id=${json.id}<br/><b>Transcript:</b> ${json.transcript||'(none)'}<br/><b>Translation:</b> ${json.translation||'(none)'}<br/><b>Detected source:</b> ${json.lang_src||'(unknown)'} `;
+                reloadList();
+            }
+        });
+        document.body.appendChild(uploadBtn);
+
+        // init
+        reloadList();
+        </script>
+</body>
+</html>

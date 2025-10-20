@@ -1,3 +1,20 @@
+from fastapi import FastAPI
+from .routes import router
+from .models import init_db
+from contextlib import asynccontextmanager
+from fastapi.staticfiles import StaticFiles
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # startup
+    init_db()
+    yield
+    # shutdown (nothing)
+
+
+app = FastAPI(title="Blind Stick Server", lifespan=lifespan)
+app.include_router(router)
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timezone
@@ -12,6 +29,7 @@ from sqlalchemy import (
     create_engine, Column, Integer, Float, String, DateTime, text
 )
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import Text
 
 # ----------------------------
 # Config
@@ -40,8 +58,8 @@ class GPSPoint(Base):
     hdop = Column(Float, nullable=True)
     ts = Column(DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP"))
-
 Base.metadata.create_all(bind=engine)
+import asyncio
 
 # ----------------------------
 # FastAPI app
@@ -66,6 +84,16 @@ class GPSOut(BaseModel):
     lon: float
     hdop: Optional[float] = None
     ts: datetime
+    created_at: datetime
+
+
+class VoiceOut(BaseModel):
+    id: int
+    device_id: Optional[str]
+    lang_src: Optional[str]
+    lang_tgt: Optional[str]
+    transcript: Optional[str]
+    translation: Optional[str]
     created_at: datetime
 
 # ----------------------------
@@ -256,3 +284,6 @@ LEAFLET_HTML = """
 @app.get("/map", response_class=HTMLResponse)
 def map_page():
     return HTMLResponse(LEAFLET_HTML)
+
+
+# voice endpoints removed
