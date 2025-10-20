@@ -92,7 +92,12 @@ def _auth_or_401(x_api_key: Optional[str]):
 # ----------------------------
 @app.get("/health")
 def health():
-    return {"ok": True, "time": datetime.now(timezone.utc).isoformat()}
+    return {"status": "ok", "time": datetime.now(timezone.utc).isoformat()}
+
+
+@app.get("/")
+def root():
+    return {"message": "Blind Stick Server is running"}
 
 @app.post("/receive_gps", response_model=dict)
 def receive_gps(
