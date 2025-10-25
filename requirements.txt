@@ -10,4 +10,5 @@ python-multipart
 aiofiles
 google-cloud-speech
 google-cloud-translate
+googlemaps
 jinja2
