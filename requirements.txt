@@ -5,3 +5,10 @@ httpx==0.28.1
 sqlalchemy
 psycopg2-binary
 pydantic
+python-dotenv
+python-multipart
+aiofiles
+google-cloud-speech
+google-cloud-translate
+googlemaps
+jinja2

@@ -23,7 +23,14 @@ python -m pip install -r requirements.txt python-dotenv
 ```
 API_KEY=change-me
 DATABASE_URL=sqlite:///./gps.sqlite3
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
+GOOGLE_MAPS_API_KEY=your-google-maps-api-key
 ```
+
+**For navigation features:**
+- Get Google Cloud credentials (Speech-to-Text + Translation): https://console.cloud.google.com/
+- Get Google Maps API key (Geocoding + Directions): https://console.cloud.google.com/apis/credentials
+- Enable these APIs: Cloud Speech-to-Text, Cloud Translation, Geocoding, Directions, Places
 
 4. Run the server with uvicorn:
 
@@ -43,6 +50,19 @@ The server will be available at http://127.0.0.1:8000
 - GET /track?device_id=...&limit=... — returns recent points (limit default 100)
 - GET /geojson?device_id=...&limit=... — returns GeoJSON FeatureCollection
 - GET /map — simple Leaflet map showing recent points
+- **POST /navigate** — voice-based navigation endpoint (requires audio, GPS, heading from ESP32)
+  - Accepts multipart/form-data with:
+    - `device_id` (string): ESP32 device identifier
+    - `lat` (float): current latitude
+    - `lng` (float): current longitude
+    - `heading` (float, optional): compass heading in degrees
+    - `audio` (file): audio blob from I²S microphone (webm, wav, etc.)
+  - Returns navigation payload with:
+    - `transcript`: transcribed voice command
+    - `destination_place`: resolved place name/address
+    - `destination_lat`, `destination_lng`: destination coordinates
+    - `overview_polyline`: encoded polyline for route visualization
+    - `steps`: turn-by-turn navigation instructions with distance, duration, maneuvers
 
 ## Testing
 
@@ -64,6 +84,24 @@ Two basic tests are provided in `tests/test_main.py`.
 
 - The app uses SQLAlchemy and creates the `gps.sqlite3` SQLite file if not present.
 - If you deploy to a server, set a secure `API_KEY` and use a proper database URL.
+
+## Navigation Feature Testing
+
+A demo script is provided to test the `/navigate` endpoint:
+
+```bash
+# Record or use a test audio file with a voice command like:
+# "Take me to Dhaka University" or "Navigate to Central Park"
+
+python demo_navigation.py path/to/audio.webm
+```
+
+**ESP32 Integration:**
+1. ESP32 records audio from I²S microphone → saves as webm/wav blob
+2. ESP32 reads GPS coordinates (lat, lng) and compass heading
+3. ESP32 POSTs multipart form to `/navigate` with: device_id, lat, lng, heading, audio file
+4. Server responds with JSON containing transcript, destination, polyline, and turn-by-turn steps
+5. ESP32 can decode polyline, play audio instructions, or display on screen
 
 If you'd like, I can add a `.env.example` file, an integration test that posts a GPS point and verifies `/latest`, or a Dockerfile for easy containerized runs.
 # Blind-Stick-Server
